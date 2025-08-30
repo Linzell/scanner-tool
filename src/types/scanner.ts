@@ -125,7 +125,9 @@ export interface ScanResult {
 export interface SystemInfo {
   platform: SystemType;
   available_scanners: number;
+  total_scanners: number;
   active_jobs: number;
+  scanner_api: string;
 }
 
 // UI specific types
@@ -136,7 +138,6 @@ export interface ScannerFormData {
 }
 
 export interface ScannerUIState {
-  selectedSystem: SystemType | null;
   selectedScanner: Scanner | null;
   selectedDocumentType: DocumentType | null;
   scanSettings: ScanSettings;

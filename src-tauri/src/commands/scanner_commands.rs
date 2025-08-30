@@ -227,3 +227,48 @@ pub async fn preview_scan_file(file_path: String) -> Result<(), String> {
 
     Ok(())
 }
+
+#[tauri::command]
+pub async fn discover_scanners(
+    scanner_service: State<'_, ScannerService>,
+) -> Result<Vec<Scanner>, String> {
+    scanner_service.discover_scanners().await
+}
+
+#[tauri::command]
+pub async fn get_all_scanners(
+    scanner_service: State<'_, ScannerService>,
+) -> Result<Vec<Scanner>, String> {
+    scanner_service.get_all_scanners()
+}
+
+#[tauri::command]
+pub async fn add_scanner(
+    scanner: Scanner,
+    scanner_service: State<'_, ScannerService>,
+) -> Result<String, String> {
+    scanner_service.add_scanner(scanner).await
+}
+
+#[tauri::command]
+pub async fn remove_scanner(
+    scanner_id: String,
+    scanner_service: State<'_, ScannerService>,
+) -> Result<(), String> {
+    scanner_service.remove_scanner(&scanner_id)
+}
+
+#[tauri::command]
+pub async fn simulate_scanner_events(
+    scanner_service: State<'_, ScannerService>,
+) -> Result<(), String> {
+    scanner_service.simulate_scanner_events().await
+}
+
+#[tauri::command]
+pub async fn reset_scanner_status(
+    scanner_id: String,
+    scanner_service: State<'_, ScannerService>,
+) -> Result<(), String> {
+    scanner_service.reset_scanner_status(&scanner_id)
+}

@@ -33,7 +33,13 @@ pub fn run() {
             get_default_scan_settings,
             open_output_directory,
             get_scan_result,
-            preview_scan_file
+            preview_scan_file,
+            discover_scanners,
+            get_all_scanners,
+            add_scanner,
+            remove_scanner,
+            simulate_scanner_events,
+            reset_scanner_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

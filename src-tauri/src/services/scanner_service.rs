@@ -18,80 +18,32 @@ impl ScannerService {
             jobs: Arc::new(Mutex::new(HashMap::new())),
         };
 
-        // Initialize with mock scanners for demonstration
-        service.initialize_mock_scanners();
+        println!("ScannerService initialized. Use discover_scanners() to detect system scanners.");
         service
     }
 
-    fn initialize_mock_scanners(&self) {
-        let mut scanners = self.scanners.lock().unwrap();
-
-        // Windows scanners
-        let mut windows_scanner1 = Scanner::new(
-            "HP ScanJet Pro 2500 f1".to_string(),
-            ScannerType::DocumentFeeder,
-            SystemType::Windows,
-        );
-        windows_scanner1.capabilities.max_resolution = 1200;
-        windows_scanner1.capabilities.has_duplex = true;
-        windows_scanner1.capabilities.has_adf = true;
-
-        let mut windows_scanner2 = Scanner::new(
-            "Canon CanoScan LiDE 400".to_string(),
-            ScannerType::Flatbed,
-            SystemType::Windows,
-        );
-        windows_scanner2.capabilities.max_resolution = 4800;
-        windows_scanner2.capabilities.has_duplex = false;
-        windows_scanner2.capabilities.has_adf = false;
-
-        // macOS scanners
-        let mut macos_scanner1 = Scanner::new(
-            "Epson Perfection V850 Pro".to_string(),
-            ScannerType::PhotoScanner,
-            SystemType::MacOS,
-        );
-        macos_scanner1.capabilities.max_resolution = 6400;
-        macos_scanner1.capabilities.has_duplex = false;
-        macos_scanner1.capabilities.has_adf = false;
-
-        let mut macos_scanner2 = Scanner::new(
-            "Brother MFC-L3770CDW".to_string(),
-            ScannerType::DocumentFeeder,
-            SystemType::MacOS,
-        );
-        macos_scanner2.capabilities.max_resolution = 1200;
-        macos_scanner2.capabilities.has_duplex = true;
-        macos_scanner2.capabilities.has_adf = true;
-
-        // Linux scanners
-        let mut linux_scanner1 = Scanner::new(
-            "HP LaserJet MFP M28w".to_string(),
-            ScannerType::Flatbed,
-            SystemType::Linux,
-        );
-        linux_scanner1.capabilities.max_resolution = 1200;
-        linux_scanner1.capabilities.has_duplex = false;
-        linux_scanner1.capabilities.has_adf = false;
-
-        let mut linux_scanner2 = Scanner::new(
-            "SANE Generic Scanner".to_string(),
-            ScannerType::DocumentFeeder,
-            SystemType::Linux,
-        );
-        linux_scanner2.capabilities.max_resolution = 600;
-        linux_scanner2.capabilities.has_duplex = true;
-        linux_scanner2.capabilities.has_adf = true;
-
-        scanners.insert(windows_scanner1.id.clone(), windows_scanner1);
-        scanners.insert(windows_scanner2.id.clone(), windows_scanner2);
-        scanners.insert(macos_scanner1.id.clone(), macos_scanner1);
-        scanners.insert(macos_scanner2.id.clone(), macos_scanner2);
-        scanners.insert(linux_scanner1.id.clone(), linux_scanner1);
-        scanners.insert(linux_scanner2.id.clone(), linux_scanner2);
-    }
+    // Scanner discovery is now handled by the discover_scanners() method
+    // which simulates system-specific scanner detection APIs
 
     pub fn get_scanners(&self) -> Result<Vec<Scanner>, String> {
+        let scanners = self.scanners.lock().map_err(|e| e.to_string())?;
+        let current_system = self.detect_platform();
+
+        // Return scanners for the current system, but if none found, suggest discovery
+        let system_scanners: Vec<Scanner> = scanners
+            .values()
+            .filter(|scanner| scanner.system_type == current_system)
+            .cloned()
+            .collect();
+
+        if system_scanners.is_empty() {
+            println!("No scanners found. Use discover_scanners() to detect system scanners.");
+        }
+
+        Ok(system_scanners)
+    }
+
+    pub fn get_all_scanners(&self) -> Result<Vec<Scanner>, String> {
         let scanners = self.scanners.lock().map_err(|e| e.to_string())?;
         Ok(scanners.values().cloned().collect())
     }
@@ -103,6 +55,161 @@ impl ScannerService {
             .filter(|scanner| scanner.system_type == system_type)
             .cloned()
             .collect())
+    }
+
+    pub async fn discover_scanners(&self) -> Result<Vec<Scanner>, String> {
+        // Simulate scanner discovery process with system detection delay
+        sleep(Duration::from_millis(1500)).await;
+
+        let current_system = self.detect_platform();
+        println!("Discovering scanners for system: {:?}", current_system);
+
+        // Clear existing scanners before discovery
+        {
+            let mut scanners = self.scanners.lock().map_err(|e| e.to_string())?;
+            scanners.clear();
+        } // Release lock before async operations
+
+        // Discover scanners based on system type
+        let discovered_scanners = match current_system {
+            SystemType::Windows => {
+                println!("Simulating WIA scanner discovery...");
+                self.simulate_windows_discovery().await?
+            }
+            SystemType::MacOS => {
+                println!("Simulating Image Capture framework discovery...");
+                self.simulate_macos_discovery().await?
+            }
+            SystemType::Linux => {
+                println!("Simulating SANE scanner discovery...");
+                self.simulate_linux_discovery().await?
+            }
+        };
+
+        // Add discovered scanners to the collection
+        {
+            let mut scanners = self.scanners.lock().map_err(|e| e.to_string())?;
+            for scanner in &discovered_scanners {
+                scanners.insert(scanner.id.clone(), scanner.clone());
+            }
+            println!("Discovery completed. Found {} scanners", scanners.len());
+        }
+
+        Ok(discovered_scanners)
+    }
+
+    async fn simulate_windows_discovery(&self) -> Result<Vec<Scanner>, String> {
+        // Simulate WIA API calls with realistic delays
+        let mut discovered = Vec::new();
+
+        sleep(Duration::from_millis(300)).await;
+        println!("Querying WIA device manager...");
+
+        sleep(Duration::from_millis(200)).await;
+        println!("Found WIA-compatible device: HP ScanJet Pro 2500 f1");
+        let mut scanner1 = Scanner::new(
+            "HP ScanJet Pro 2500 f1 (WIA)".to_string(),
+            ScannerType::DocumentFeeder,
+            SystemType::Windows,
+        );
+        scanner1.capabilities.max_resolution = 1200;
+        scanner1.capabilities.has_duplex = true;
+        scanner1.capabilities.has_adf = true;
+        discovered.push(scanner1);
+
+        sleep(Duration::from_millis(200)).await;
+        println!("Found WIA-compatible device: Canon CanoScan LiDE 400");
+        let mut scanner2 = Scanner::new(
+            "Canon CanoScan LiDE 400 (WIA)".to_string(),
+            ScannerType::Flatbed,
+            SystemType::Windows,
+        );
+        scanner2.capabilities.max_resolution = 4800;
+        scanner2.capabilities.has_duplex = false;
+        scanner2.capabilities.has_adf = false;
+        discovered.push(scanner2);
+
+        Ok(discovered)
+    }
+
+    async fn simulate_macos_discovery(&self) -> Result<Vec<Scanner>, String> {
+        // Simulate Image Capture framework calls with realistic delays
+        let mut discovered = Vec::new();
+
+        sleep(Duration::from_millis(400)).await;
+        println!("Querying Image Capture framework...");
+
+        sleep(Duration::from_millis(250)).await;
+        println!("Found Image Capture device: Brother MFC-L3770CDW");
+        let mut scanner1 = Scanner::new(
+            "Brother MFC-L3770CDW".to_string(),
+            ScannerType::DocumentFeeder,
+            SystemType::MacOS,
+        );
+        scanner1.capabilities.max_resolution = 1200;
+        scanner1.capabilities.has_duplex = true;
+        scanner1.capabilities.has_adf = true;
+        discovered.push(scanner1);
+
+        sleep(Duration::from_millis(300)).await;
+        println!("Found Image Capture device: Epson Perfection V850 Pro");
+        let mut scanner2 = Scanner::new(
+            "Epson Perfection V850 Pro".to_string(),
+            ScannerType::PhotoScanner,
+            SystemType::MacOS,
+        );
+        scanner2.capabilities.max_resolution = 6400;
+        scanner2.capabilities.has_duplex = false;
+        scanner2.capabilities.has_adf = false;
+        discovered.push(scanner2);
+
+        sleep(Duration::from_millis(200)).await;
+        println!("Found Image Capture device: Canon imageFORMULA R40");
+        let mut scanner3 = Scanner::new(
+            "Canon imageFORMULA R40".to_string(),
+            ScannerType::DocumentFeeder,
+            SystemType::MacOS,
+        );
+        scanner3.capabilities.max_resolution = 600;
+        scanner3.capabilities.has_duplex = true;
+        scanner3.capabilities.has_adf = true;
+        discovered.push(scanner3);
+
+        Ok(discovered)
+    }
+
+    async fn simulate_linux_discovery(&self) -> Result<Vec<Scanner>, String> {
+        // Simulate SANE API calls with realistic delays
+        let mut discovered = Vec::new();
+
+        sleep(Duration::from_millis(500)).await;
+        println!("Querying SANE daemon...");
+
+        sleep(Duration::from_millis(300)).await;
+        println!("Found SANE device: HP LaserJet MFP M28w");
+        let mut scanner1 = Scanner::new(
+            "HP LaserJet MFP M28w (SANE)".to_string(),
+            ScannerType::Flatbed,
+            SystemType::Linux,
+        );
+        scanner1.capabilities.max_resolution = 1200;
+        scanner1.capabilities.has_duplex = false;
+        scanner1.capabilities.has_adf = false;
+        discovered.push(scanner1);
+
+        sleep(Duration::from_millis(250)).await;
+        println!("Found SANE device: Epson ET-4850");
+        let mut scanner2 = Scanner::new(
+            "Epson ET-4850 (SANE)".to_string(),
+            ScannerType::Flatbed,
+            SystemType::Linux,
+        );
+        scanner2.capabilities.max_resolution = 1200;
+        scanner2.capabilities.has_duplex = false;
+        scanner2.capabilities.has_adf = true;
+        discovered.push(scanner2);
+
+        Ok(discovered)
     }
 
     pub fn get_scanner(&self, scanner_id: &str) -> Result<Scanner, String> {
@@ -346,11 +453,149 @@ impl ScannerService {
         }
     }
 
+    pub async fn add_scanner(&self, mut scanner: Scanner) -> Result<String, String> {
+        // Validate scanner is for current system
+        let current_system = self.detect_platform();
+        if scanner.system_type != current_system {
+            return Err(format!(
+                "Scanner system type {:?} does not match current system {:?}",
+                scanner.system_type, current_system
+            ));
+        }
+
+        // Generate new ID if empty
+        if scanner.id.is_empty() {
+            scanner.id = uuid::Uuid::new_v4().to_string();
+        }
+
+        // Simulate device detection delay
+        sleep(Duration::from_millis(300)).await;
+
+        let mut scanners = self.scanners.lock().map_err(|e| e.to_string())?;
+        let scanner_id = scanner.id.clone();
+        scanners.insert(scanner_id.clone(), scanner);
+
+        println!(
+            "Added scanner: {} (ID: {})",
+            scanners.get(&scanner_id).unwrap().name,
+            scanner_id
+        );
+        Ok(scanner_id)
+    }
+
+    pub fn remove_scanner(&self, scanner_id: &str) -> Result<(), String> {
+        let mut scanners = self.scanners.lock().map_err(|e| e.to_string())?;
+
+        // Check if scanner has active jobs
+        let active_jobs = self.get_active_jobs_for_scanner(scanner_id)?;
+        if !active_jobs.is_empty() {
+            return Err(format!(
+                "Cannot remove scanner with {} active jobs. Cancel jobs first.",
+                active_jobs.len()
+            ));
+        }
+
+        match scanners.remove(scanner_id) {
+            Some(scanner) => {
+                println!("Removed scanner: {} (ID: {})", scanner.name, scanner_id);
+                Ok(())
+            }
+            None => Err(format!("Scanner with ID {} not found", scanner_id)),
+        }
+    }
+
+    fn get_active_jobs_for_scanner(&self, scanner_id: &str) -> Result<Vec<String>, String> {
+        let jobs = self.jobs.lock().map_err(|e| e.to_string())?;
+        Ok(jobs
+            .values()
+            .filter(|job| {
+                job.scanner_id == scanner_id
+                    && matches!(
+                        job.status,
+                        JobStatus::Pending | JobStatus::Scanning | JobStatus::Processing
+                    )
+            })
+            .map(|job| job.id.clone())
+            .collect())
+    }
+
+    pub async fn simulate_scanner_events(&self) -> Result<(), String> {
+        // Simulate random scanner events (disconnect/reconnect)
+        let mut rng = rand::thread_rng();
+
+        if rng.gen::<f32>() < 0.1 {
+            // 10% chance of scanner event
+            let scanners = {
+                let scanners_lock = self.scanners.lock().map_err(|e| e.to_string())?;
+                scanners_lock.values().cloned().collect::<Vec<_>>()
+            };
+
+            if !scanners.is_empty() {
+                let random_scanner = &scanners[rng.gen_range(0..scanners.len())];
+                let event_type = rng.gen_range(0..3);
+
+                match event_type {
+                    0 => {
+                        // Simulate scanner going offline
+                        let mut scanners_lock = self.scanners.lock().map_err(|e| e.to_string())?;
+                        if let Some(scanner) = scanners_lock.get_mut(&random_scanner.id) {
+                            scanner.status = ScannerStatus::Offline;
+                            println!("Scanner {} went offline", scanner.name);
+                        }
+                    }
+                    1 => {
+                        // Simulate scanner coming back online
+                        let mut scanners_lock = self.scanners.lock().map_err(|e| e.to_string())?;
+                        if let Some(scanner) = scanners_lock.get_mut(&random_scanner.id) {
+                            if matches!(scanner.status, ScannerStatus::Offline) {
+                                scanner.status = ScannerStatus::Available;
+                                println!("Scanner {} came back online", scanner.name);
+                            }
+                        }
+                    }
+                    _ => {
+                        // Simulate scanner error
+                        let mut scanners_lock = self.scanners.lock().map_err(|e| e.to_string())?;
+                        if let Some(scanner) = scanners_lock.get_mut(&random_scanner.id) {
+                            scanner.status = ScannerStatus::Error("Paper jam detected".to_string());
+                            println!("Scanner {} reported an error", scanner.name);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn reset_scanner_status(&self, scanner_id: &str) -> Result<(), String> {
+        let mut scanners = self.scanners.lock().map_err(|e| e.to_string())?;
+        match scanners.get_mut(scanner_id) {
+            Some(scanner) => {
+                scanner.status = ScannerStatus::Available;
+                println!("Reset scanner {} status to Available", scanner.name);
+                Ok(())
+            }
+            None => Err(format!("Scanner with ID {} not found", scanner_id)),
+        }
+    }
+
     pub fn get_system_info(&self) -> SystemInfo {
+        let current_platform = self.detect_platform();
         SystemInfo {
-            platform: self.detect_platform(),
+            platform: current_platform,
             available_scanners: self.get_scanners().unwrap_or_default().len(),
+            total_scanners: self.get_all_scanners().unwrap_or_default().len(),
             active_jobs: self.get_active_jobs_count(),
+            scanner_api: self.get_scanner_api_info(current_platform),
+        }
+    }
+
+    fn get_scanner_api_info(&self, platform: SystemType) -> String {
+        match platform {
+            SystemType::Windows => "Windows Image Acquisition (WIA)".to_string(),
+            SystemType::MacOS => "Image Capture Framework".to_string(),
+            SystemType::Linux => "Scanner Access Now Easy (SANE)".to_string(),
         }
     }
 
@@ -385,7 +630,9 @@ impl ScannerService {
 pub struct SystemInfo {
     pub platform: SystemType,
     pub available_scanners: usize,
+    pub total_scanners: usize,
     pub active_jobs: usize,
+    pub scanner_api: String,
 }
 
 impl Default for ScannerService {

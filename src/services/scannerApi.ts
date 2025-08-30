@@ -133,6 +133,45 @@ export class ScannerApi {
     await invoke("preview_scan_file", { filePath });
     console.log('ScannerApi: preview_scan_file completed');
   }
+
+  static async discoverScanners(): Promise<Scanner[]> {
+    console.log('ScannerApi: Discovering scanners...');
+    const result = await invoke("discover_scanners");
+    console.log('ScannerApi: discover_scanners result:', result);
+    return result as Scanner[];
+  }
+
+  static async getAllScanners(): Promise<Scanner[]> {
+    console.log('ScannerApi: Getting all scanners');
+    const result = await invoke("get_all_scanners");
+    console.log('ScannerApi: get_all_scanners result:', result);
+    return result as Scanner[];
+  }
+
+  static async addScanner(scanner: Scanner): Promise<string> {
+    console.log('ScannerApi: Adding scanner:', scanner);
+    const result = await invoke("add_scanner", { scanner });
+    console.log('ScannerApi: add_scanner result:', result);
+    return result as string;
+  }
+
+  static async removeScanner(scannerId: string): Promise<void> {
+    console.log('ScannerApi: Removing scanner:', scannerId);
+    await invoke("remove_scanner", { scannerId });
+    console.log('ScannerApi: remove_scanner completed');
+  }
+
+  static async simulateScannerEvents(): Promise<void> {
+    console.log('ScannerApi: Simulating scanner events');
+    await invoke("simulate_scanner_events");
+    console.log('ScannerApi: simulate_scanner_events completed');
+  }
+
+  static async resetScannerStatus(scannerId: string): Promise<void> {
+    console.log('ScannerApi: Resetting scanner status:', scannerId);
+    await invoke("reset_scanner_status", { scannerId });
+    console.log('ScannerApi: reset_scanner_status completed');
+  }
 }
 
 // Helper functions for status and type checking

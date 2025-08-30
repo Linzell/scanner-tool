@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { QueryClient, QueryClientProvider, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Monitor } from 'lucide-react';
-import { SystemSelector } from './components/SystemSelector';
+
 import { ScannerSelector } from './components/ScannerSelector';
 import { DocumentTypeSelector } from './components/DocumentTypeSelector';
 import { ScanSettings } from './components/ScanSettings';
 import { ScanActions } from './components/ScanActions';
+import { SystemInfoPanel } from './components/SystemInfoPanel';
+import { DevTools } from './components/DevTools';
 import { ScannerApi } from './services/scannerApi';
 import type {
-  SystemType,
   Scanner,
   DocumentType,
   ScanSettings as ScanSettingsType,
@@ -27,7 +28,6 @@ const queryClient = new QueryClient({
 
 const ScannerApp: React.FC = () => {
   const [uiState, setUIState] = useState<ScannerUIState>({
-    selectedSystem: null,
     selectedScanner: null,
     selectedDocumentType: null,
     scanSettings: {
@@ -45,7 +45,7 @@ const ScannerApp: React.FC = () => {
   const queryClient = useQueryClient();
 
   // Fetch system info
-  const { data: systemInfo } = useQuery({
+  const { data: systemInfo, isLoading: isLoadingSystemInfo, refetch: refetchSystemInfo } = useQuery({
     queryKey: ['systemInfo'],
     queryFn: ScannerApi.getSystemInfo,
   });
@@ -57,37 +57,41 @@ const ScannerApp: React.FC = () => {
     }
   }, [systemInfo]);
 
-  // Auto-detect and select current system
-  useEffect(() => {
-    if (systemInfo?.platform && !uiState.selectedSystem) {
-      console
-        .log('App: Auto-selecting system:', systemInfo.platform);
-      setUIState(prev => ({
-        ...prev,
-        selectedSystem: systemInfo.platform,
-      }));
-    }
-  }, [systemInfo?.platform, uiState.selectedSystem]);
+  // System is now auto-detected by backend, no need for manual selection
 
   // Fetch all scanners and filter by selected system
-  const { data: allScanners = [], isLoading: isLoadingAllScanners } = useQuery({
+  const { data: allScanners = [], isLoading: isLoadingAllScanners, refetch: refetchScanners } = useQuery({
     queryKey: ['allScanners'],
     queryFn: ScannerApi.getScanners,
   });
 
-  // Filter scanners by selected system
-  const scanners = uiState.selectedSystem
-    ? allScanners.filter(scanner => scanner.system_type === uiState.selectedSystem)
-    : [];
+  // Auto-discover scanners on first load when system info is available
+  useEffect(() => {
+    const autoDiscover = async () => {
+      if (systemInfo && allScanners.length === 0 && !isLoadingAllScanners) {
+        console.log('Auto-discovering scanners for', systemInfo.platform);
+        try {
+          await ScannerApi.discoverScanners();
+          refetchScanners();
+          refetchSystemInfo();
+        } catch (error) {
+          console.error('Auto-discovery failed:', error);
+        }
+      }
+    };
+
+    autoDiscover();
+  }, [systemInfo, allScanners.length, isLoadingAllScanners, refetchScanners, refetchSystemInfo]);
+
+  // Since we now auto-detect system and backend filters scanners, use all returned scanners
+  const scanners = allScanners;
 
   const isLoadingScanners = isLoadingAllScanners;
 
-  // Debug scanner filtering
+  // Debug scanner data
   useEffect(() => {
-    console.log('App: All scanners:', allScanners);
-    console.log('App: Selected system:', uiState.selectedSystem);
-    console.log('App: Filtered scanners:', scanners);
-  }, [allScanners, uiState.selectedSystem, scanners]);
+    console.log('App: Scanners from backend:', scanners);
+  }, [scanners]);
 
   // Fetch default settings
   const { data: defaultSettings } = useQuery({
@@ -154,14 +158,7 @@ const ScannerApp: React.FC = () => {
     }
   }, [defaultSettings, uiState.scanSettings]);
 
-  const handleSystemSelect = (system: SystemType) => {
-    console.log('App: System selected:', system);
-    setUIState(prev => ({
-      ...prev,
-      selectedSystem: system,
-      selectedScanner: null, // Reset scanner when system changes
-    }));
-  };
+
 
   const handleScannerSelect = (scanner: Scanner) => {
     console.log('App: Scanner selected:', scanner);
@@ -253,7 +250,6 @@ const ScannerApp: React.FC = () => {
 
   const handleResetForm = () => {
     setUIState({
-      selectedSystem: null,
       selectedScanner: null,
       selectedDocumentType: null,
       scanSettings: defaultSettings || {
@@ -266,6 +262,30 @@ const ScannerApp: React.FC = () => {
       },
       currentJob: null,
     });
+  };
+
+  const handleRefreshSystemInfo = () => {
+    refetchSystemInfo();
+  };
+
+  const handleRefreshScanners = () => {
+    refetchScanners();
+    queryClient.invalidateQueries({ queryKey: ['systemInfo'] });
+  };
+
+  const handleRemoveScanner = (_scannerId: string) => {
+    // Scanner is removed by the backend, just refresh the list
+    handleRefreshScanners();
+  };
+
+  const handleResetScannerStatus = (_scannerId: string) => {
+    // Status is reset by the backend, just refresh the list
+    handleRefreshScanners();
+  };
+
+  const handleDevToolsRefresh = () => {
+    handleRefreshScanners();
+    handleRefreshSystemInfo();
   };
 
   const isProcessing = createScanJobMutation.isPending || startScanJobMutation.isPending;
@@ -281,11 +301,54 @@ const ScannerApp: React.FC = () => {
               <div>
                 <h1 className="text-xl font-semibold text-gray-900">Scanner Tool</h1>
                 {systemInfo && (
-                  <p className="text-sm text-gray-500">
-                    {systemInfo.platform} • {systemInfo.available_scanners} scanners • {systemInfo.active_jobs} active jobs
-                  </p>
+                  <div className="flex items-center space-x-4 text-sm text-gray-500">
+                    <span className="flex items-center space-x-1">
+                      <div className={`w-2 h-2 rounded-full ${systemInfo.active_jobs === 0 ? 'bg-green-500' : 'bg-yellow-500'
+                        }`}></div>
+                      <span>{systemInfo.platform}</span>
+                    </span>
+                    <span>{systemInfo.available_scanners} scanners</span>
+                    {systemInfo.active_jobs > 0 && (
+                      <span className="text-blue-600 font-medium">
+                        {systemInfo.active_jobs} active
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              {uiState.selectedScanner && (
+                <div className="text-sm text-gray-600">
+                  <span className="font-medium">{uiState.selectedScanner.name}</span>
+                </div>
+              )}
+              {uiState.currentJob && (
+                <div className="flex items-center space-x-2">
+                  <div className="text-sm">
+                    {uiState.currentJob.status === "Scanning" && (
+                      <div className="flex items-center space-x-2">
+                        <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+                        <span className="text-blue-600 font-medium">
+                          Scanning {Math.round(uiState.currentJob.progress * 100)}%
+                        </span>
+                      </div>
+                    )}
+                    {uiState.currentJob.status === "Processing" && (
+                      <div className="flex items-center space-x-2">
+                        <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
+                        <span className="text-yellow-600 font-medium">Processing</span>
+                      </div>
+                    )}
+                    {uiState.currentJob.status === "Completed" && (
+                      <div className="flex items-center space-x-2">
+                        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                        <span className="text-green-600 font-medium">Completed</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -294,22 +357,26 @@ const ScannerApp: React.FC = () => {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-8">
-          {/* System Selection */}
-          <SystemSelector
-            selectedSystem={uiState.selectedSystem}
-            onSystemSelect={handleSystemSelect}
+          {/* System Information Panel */}
+          <SystemInfoPanel
+            systemInfo={systemInfo || null}
+            isLoading={isLoadingSystemInfo}
+            onRefresh={handleRefreshSystemInfo}
           />
 
-          {/* Scanner Selection */}
-          {uiState.selectedSystem && (
+          {/* Scanner Selection - Show when system info is loaded */}
+          {systemInfo && (
             <ScannerSelector
               scanners={scanners}
               selectedScanner={uiState.selectedScanner}
               onScannerSelect={handleScannerSelect}
-              systemType={uiState.selectedSystem}
+              systemType={systemInfo.platform}
               isLoading={isLoadingScanners}
               onTestConnection={handleTestConnection}
               testingConnection={testingConnection}
+              onRefreshScanners={handleRefreshScanners}
+              onRemoveScanner={handleRemoveScanner}
+              onResetScannerStatus={handleResetScannerStatus}
             />
           )}
 
@@ -348,6 +415,11 @@ const ScannerApp: React.FC = () => {
           )}
         </div>
       </main>
+
+      {/* Development Tools */}
+      {import.meta.env.DEV && (
+        <DevTools onRefresh={handleDevToolsRefresh} />
+      )}
     </div>
   );
 };
